@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys, xmlrpclib, argparse, string, logging
+import netrc
 
 #
 # Logging
@@ -27,6 +28,8 @@ console_handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(levelname)s: [%(name)s] %(message)s')
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
+
 
 class ConfluenceSpace(object):
     def __init__(self, token, server):
@@ -200,8 +203,8 @@ def error_out(error_message):
 def Parser():
     parser = argparse.ArgumentParser(description="Confluence wiki API")
     parser.add_argument("-w", "--wikiurl", help="Wiki URL (only FQDN, no / and such)", required=True)
-    parser.add_argument("-u", "--username", help="Login Username", required=True)
-    parser.add_argument("-p", "--password", help="Login Password", required=True)
+    parser.add_argument("-u", "--username", help="Login Username")
+    parser.add_argument("-p", "--password", help="Login Password")
     parser.add_argument("-v", "--verbose", help="Enable debug logging", action="store_true")
     subparsers = parser.add_subparsers(dest="action")
 
@@ -320,8 +323,32 @@ def Content(args):
 def Connect(args):
     wiki_url = args.wikiurl + "/rpc/xmlrpc"
     xml_server = xmlrpclib.Server(wiki_url)
+    #print args.wikiurl
+
+    authenticators=None
     try:
-        token = ConfluenceAuth(xml_server,args.username,args.password).login()
+        netr = netrc.netrc()
+        authenticators = netr.authenticators(args.wikiurl.replace("https://",""))
+    except:
+        pass
+    password=""
+    username=""
+    if args.password:
+        password=args.password
+    elif authenticators:
+        password=authenticators[2]
+    else:
+        print "Please give --password <password>"
+        exit(1)
+    if args.username:
+        username=args.username
+    elif authenticators:
+        username=authenticators[0]
+    else:
+        print "Please give --username <username>"
+        exit(1)
+    try:
+        token = ConfluenceAuth(xml_server,username,password).login()
     except xmlrpclib.Fault as err:
         error_out("%d: %s" % ( err.faultCode, err.faultString))
     return {"token":token,"xml_server":xml_server}
